@@ -11,9 +11,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * time: 12/4/15
  * description:
- * <p/>
- * A Single background thread run all the task. FIFO
- * <p/>
+ * <p> A Single background thread run all the task. FIFO </p>
  * todo 1.添加超时机制
  * todo 2.异常机制测试UT
  * todo 3.重试机制

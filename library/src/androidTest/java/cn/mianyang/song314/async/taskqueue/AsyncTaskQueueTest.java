@@ -1,8 +1,7 @@
 package cn.mianyang.song314.async.taskqueue;
 
 import android.os.SystemClock;
-
-import com.orhanobut.logger.Logger;
+import android.util.Log;
 
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -36,9 +35,6 @@ public class AsyncTaskQueueTest extends BaseInstrumentationTestCase {
 
         boolean enableErrorTask = false;
 
-        Logger.init("TestAsyncTaskQueue").hideThreadInfo().methodOffset(0);
-
-        Logger.d(" test start !!!!");
 
         LinkedList<AsyncTaskQueue.BaseTask> realNormalList = new LinkedList<>();
         LinkedList<AsyncTaskQueue.BaseTask> realErrorList = new LinkedList<>();
@@ -108,7 +104,7 @@ public class AsyncTaskQueueTest extends BaseInstrumentationTestCase {
         synchronized (mTestCase) {
             if (!queue.isAllTaskFinish()) {
                 try {
-                    Logger.i(" smart waiting 22222 : " + ++mIndex);
+                    Log.i("", " smart waiting 22222 : " + ++mIndex);
                     mTestCase.wait();
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -136,7 +132,6 @@ public class AsyncTaskQueueTest extends BaseInstrumentationTestCase {
         testErrorList.clear();
         testNormalList.clear();
 
-        Logger.d(" test finish !!!!");
 
     }
 
@@ -147,7 +142,6 @@ public class AsyncTaskQueueTest extends BaseInstrumentationTestCase {
 
     private void smartNotify() {
         synchronized (mTestCase) {
-            Logger.i(" smart notify .....");
             mTestCase.notify();
         }
     }
@@ -207,7 +201,7 @@ public class AsyncTaskQueueTest extends BaseInstrumentationTestCase {
         public void run() {
             SystemClock.sleep(new Random().nextInt(10) + 5);
             int x = 100 / 0;
-            Logger.i(" result = " + x);
+            Log.i("" ," result = " + x);
             throw new IllegalStateException("this is a test exception");
         }
     }

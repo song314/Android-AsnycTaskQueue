@@ -1,6 +1,7 @@
 apply plugin: 'com.android.library'
 apply plugin: 'me.tatarka.retrolambda'
-
+apply plugin: 'com.github.dcendents.android-maven'
+apply plugin: 'com.jfrog.bintray'
 
 android {
     compileSdkVersion 23
@@ -29,5 +30,83 @@ android {
 dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar'])
     testCompile 'junit:junit:4.12'
-    testCompile 'io.reactivex:rxandroid:1.0.1'
+    androidTestCompile 'io.reactivex:rxandroid:1.0.1'
+}
+
+version = "0.1.1"
+group = "cn.mianyang.song314"
+
+def siteUrl = 'https://github.com/song314/Android-AsnycTaskQueue'    // project homepage
+def gitUrl = 'https://github.com/song314/Android-AsnycTaskQueue.git' // project git
+
+Properties properties = new Properties()
+properties.load(project.rootProject.file('local.properties').newDataInputStream())
+
+def bUser = properties.getProperty("bintray.user")
+def bKey = properties.getProperty("bintray.apikey")
+def bProjectName = "async-task-queue-v9"
+
+bintray {
+    user = bUser
+    key = bKey
+    configurations = ['archives']
+    pkg {
+        repo = "maven"
+        name = bProjectName                // project name in jcenter
+        websiteUrl = siteUrl
+        vcsUrl = gitUrl
+        licenses = ["Apache-2.0"]
+        publish = true
+    }
+}
+
+install {
+    repositories.mavenInstaller {
+        // This generates POM.xml with proper parameters
+        pom {
+            project {
+                packaging 'aar'
+                name bProjectName
+                url siteUrl
+                licenses {
+                    license {
+                        name 'The Apache Software License, Version 2.0'
+                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id  bUser
+                        name 'song.tang'
+                        email 'song314@qq.com'
+                    }
+                }
+                scm {
+                    connection gitUrl
+                    developerConnection gitUrl
+                    url siteUrl
+                }
+            }
+        }
+    }
+}
+
+task sourcesJar(type: Jar) {
+    from android.sourceSets.main.java.srcDirs
+    classifier = 'sources'
+}
+
+task javadoc(type: Javadoc) {
+    source = android.sourceSets.main.java.srcDirs
+    classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+artifacts {
+    archives javadocJar
+    archives sourcesJar
 }
