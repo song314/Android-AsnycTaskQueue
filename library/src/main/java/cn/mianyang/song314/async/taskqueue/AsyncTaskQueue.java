@@ -8,13 +8,18 @@ import java.util.Collection;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicLong;
 
+
 /**
  * time: 12/4/15
  * description:
- * <p> A Single background thread run all the task. FIFO </p>
- * todo 1.添加超时机制
+ * <p>
+ * A Single background thread run all the task. FIFO
+ * <p>
+ * todo 1.添加超时
  * todo 2.异常机制测试UT
  * todo 3.重试机制
+ * todo 4.Listener使用Runnable代替，减少method数量
+ * fixbug 偶尔会重复做一个任务2次
  *
  * @author tangsong
  */
@@ -31,9 +36,10 @@ public class AsyncTaskQueue<T extends AsyncTaskQueue.BaseTask> {
     private OnEachFinishListener mEachListener;
     private OnErrorListener mErrorListener;
     private OnAllFinishListener mAllListener;
-    private OnTimeOutListener mTimeOutListener;
-    private Action mThreadDeadAction;
+    private OnTimeOutListener mTimeOutListener; //TODO implement this
+    private Runnable mThreadDeadAction;
 
+    private long mTimeOutMillis = 0;
 
     public AsyncTaskQueue() {
         mWaitingQueue = new LinkedBlockingDeque();
@@ -48,21 +54,26 @@ public class AsyncTaskQueue<T extends AsyncTaskQueue.BaseTask> {
         }
 
         if (mWaitingQueue.contains(task)) {
-            Log.w(TAG, "AsyncTaskQueue : ignore the same task : " + task);
+            Log.w(TAG ,"AsyncTaskQueue : ignore the same task, it's in the queue: " + task);
             return;
         }
 
-        synchronized (mLooperThread) {
+        if (task.equals(mCurrTask)) {
+            Log.w(TAG, "AsyncTaskQueue : ignore the same task, it's the current task : " + mCurrTask);
+        }
 
+
+        Log.i(TAG, " add task : " + task);
+        mWaitingQueue.add(task);
+
+        synchronized (mLooperThread) {
             Log.i(TAG, "check the thread state = " + mLooperThread.getState());
-            if (isAllTaskFinish()) {
+            if (isWaiting()) {
                 mLooperThread.notify();
                 Log.i(TAG, "task thread is waitting , notify it");
             }
         }
 
-        Log.i(TAG, " add task : " + task);
-        mWaitingQueue.add(task);
     }
 
     public void addAll(Collection<T> all) {
@@ -110,8 +121,12 @@ public class AsyncTaskQueue<T extends AsyncTaskQueue.BaseTask> {
         this.mTimeOutListener = mTimeOutListener;
     }
 
-    public void onThreadDead(Action listener) {
+    public void onThreadDead(Runnable listener) {
         mThreadDeadAction = listener;
+    }
+
+    public void stop() {
+        mWaitingQueue.clear();
     }
 
 
@@ -131,7 +146,7 @@ public class AsyncTaskQueue<T extends AsyncTaskQueue.BaseTask> {
         void onError(T errorTask, Exception e);
     }
 
-    public interface OnAllFinishListener<T extends BaseTask> {
+    public interface OnAllFinishListener {
         void onAllFinish();
     }
 
@@ -143,78 +158,80 @@ public class AsyncTaskQueue<T extends AsyncTaskQueue.BaseTask> {
             long cost;
 
             while (!this.isInterrupted()) {
+
                 task = mWaitingQueue.poll();
                 mCurrTask = task;
 
                 if (task != null) {
-                    // work for this task
-                    try {
-                        Log.i(TAG, " run new task : " + task);
-                        cost = SystemClock.currentThreadTimeMillis();
-                        // run the task
-                        task.run();
 
-                        Log.i(TAG, " this cost : " + (SystemClock.currentThreadTimeMillis() - cost));
-
-                        clearCurrentTask();
-
-                        Log.i(TAG, "  task has finished : " + task);
-
-                        mEachListener.onEachFinish(task);
-
-                        if (mWaitingQueue.size() <= 0) {
-                            mAllListener.onAllFinish();
-                        }
-                    } catch (Exception e) {
-                        clearCurrentTask();
-
-                        Log.e(TAG, "AsyncTaskQueue :  meet an exception in task : " + task);
-                        e.printStackTrace();
-
-                        if (e instanceof InterruptedException) {
-                            Thread.interrupted();
-                        }
-                        mFailQueue.push(task);
-                        mErrorListener.onError(task, e);
-                    }
+                    cost = SystemClock.elapsedRealtime();
+                    working(task);
+                    Log.i(TAG, task.getClass().getSimpleName() + " cost : " + (SystemClock.elapsedRealtime() - cost));
 
                 } else {
                     // no tasks , let it waiting
-                    synchronized (mLooperThread) {
-
-                        if (mWaitingQueue.size() <= 0) {
-                            try {
-                                Log.i(TAG, " all task is finish, waiting ....");
-
-                                mLooperThread.wait();
-
-                                Log.i(TAG, " waiting is finished , go on ~~");
-                            } catch (InterruptedException e) {
-                                if (e instanceof InterruptedException) {
-                                    Thread.interrupted();
-                                }
-                                e.printStackTrace();
-                            }
-                        }
-                    }
-
+                    waiting();
                 }
-
-
             }
 
             mWaitingQueue.clear();
             mFailQueue.clear();
 
-            mThreadDeadAction.call();
-            Log.i(TAG, "The Loop Thread is finished.");
+            if (mThreadDeadAction != null) {
+                mThreadDeadAction.run();
+            }
+            Log.i(TAG, " ----- > The Loop Thread is finished.");
+        }
+
+        private void waiting() {
+            synchronized (mLooperThread) {
+
+                if (mWaitingQueue.size() <= 0) {
+                    try {
+                        Log.i(TAG, " all task is finish, waiting ....");
+                        mLooperThread.wait();
+                        Log.i(TAG, " waiting is finished , go on ~~");
+                    } catch (InterruptedException e) {
+                        if (e instanceof InterruptedException) {
+                            Thread.interrupted();
+                        }
+                        e.printStackTrace();
+                    }
+                }
+
+            }
+        }
+
+        private void working(T task) {
+
+            try {
+                Log.i(TAG, " run new task : " + task);
+                // run the task
+                task.run();
+
+                if (mEachListener != null) {
+                    mEachListener.onEachFinish(task);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "AsyncTaskQueue :  meet an exception in task : " + task, e);
+
+                if (e instanceof InterruptedException) {
+                    Thread.interrupted();
+                }
+                mFailQueue.push(task);
+                task.errorCount++;
+                if (mErrorListener != null) {
+                    mErrorListener.onError(task, e);
+                }
+            } finally {
+                if (mWaitingQueue.size() <= 0) {
+                    if (mAllListener != null) {
+                        mAllListener.onAllFinish();
+                    }
+                }
+            }
         }
     }
-
-    private void clearCurrentTask() {
-        mCurrTask = null;
-    }
-
 
     abstract public static class BaseTask<T> implements AsyncTaskQueue.Task {
         private static AtomicLong ID = new AtomicLong();
@@ -222,6 +239,7 @@ public class AsyncTaskQueue<T extends AsyncTaskQueue.BaseTask> {
         protected T taskData;
         public String taskName;
         final long taskId;
+        protected int errorCount;
 
 
         public BaseTask() {
@@ -259,14 +277,35 @@ public class AsyncTaskQueue<T extends AsyncTaskQueue.BaseTask> {
         public T getTaskInfo() {
             return taskData;
         }
+
+        public int getErrorCount() {
+            return errorCount;
+        }
     }
 
-    public boolean isAllTaskFinish() {
+    public boolean isWaiting() {
         return mLooperThread.getState() == Thread.State.WAITING;
+
     }
 
-    public interface Action {
-        void call();
+    abstract public static class SyncBaskTask<T> extends BaseTask<T> {
+
+        protected void autoWait() {
+            synchronized (this) {
+                try {
+                    wait();
+                } catch (InterruptedException e) {
+                } finally {
+                    Log.i("SyncBaskTask", " waiting finish");
+                }
+            }
+        }
+
+        protected void autoNotify() {
+            synchronized (this) {
+                notify();
+            }
+        }
     }
 
 }
