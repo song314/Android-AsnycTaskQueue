@@ -2,7 +2,7 @@ apply plugin: 'com.android.application'
 
 android {
     compileSdkVersion 23
-    buildToolsVersion '23.0.2'
+    buildToolsVersion '24.0.1'
 
     defaultConfig {
         applicationId "cn.miany.song314.asnyc.taskqueue"
@@ -20,9 +20,9 @@ android {
 }
 
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
+    compile fileTree(include: ['*.jar'], dir: 'libs')
     testCompile 'junit:junit:4.12'
     compile 'com.android.support:appcompat-v7:23.+'
     compile 'com.android.support:design:23.+'
-//    compile 'cn.mianyang.song314:async-task-queue:0.1.1'
+    //    compile 'cn.mianyang.song314:async-task-queue:0.1.1'
 }
