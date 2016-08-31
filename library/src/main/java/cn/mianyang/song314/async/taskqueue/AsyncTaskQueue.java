@@ -129,6 +129,10 @@ public class AsyncTaskQueue<T extends AsyncTaskQueue.BaseTask> {
         mWaitingQueue.clear();
     }
 
+    public boolean isAllTaskFinish() {
+        return mLooperThread.getState() == Thread.State.TIMED_WAITING;
+    }
+
 
     public interface Task {
         void run() throws Exception;
